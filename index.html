@@ -8,14 +8,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<script>
-  /* ================================================================
-     PASTE YOUR APPS SCRIPT WEB APP URL BETWEEN THE QUOTES BELOW.
-     It looks like: https://script.google.com/macros/s/AKfy..../exec
-     ================================================================ */
-  window.PRICING_API_URL = "   window.PRICING_API_URL = "https://script.google.com/macros/s/AKfycbwenmNNqrp_yuxC1m5COzXo0_1EmCAJt_3qz2zS6ht06WAYYQdVhcFzDLsFnrAWEsm8/exec";
-  window.CONTACT_EMAIL = "ajay@jupiterbs.com";
-</script>
+<!-- =====================================================================
+     PASTE YOUR APPS SCRIPT WEB APP URL INSIDE content="..." BELOW.
+     It ends in /exec, e.g. https://script.google.com/macros/s/AKfy..../exec
+     ===================================================================== -->
+<meta name="pricing-api-url" content="https://script.google.com/macros/s/AKfycbwenmNNqrp_yuxC1m5COzXo0_1EmCAJt_3qz2zS6ht06WAYYQdVhcFzDLsFnrAWEsm8/exec">
+<meta name="contact-email" content="ajay@jupiterbs.com">
 <style>
 :root{
   --ground:#F2F5F9; --surface:#FFFFFF; --sunken:#F7F9FC;
@@ -153,7 +151,19 @@ footer{max-width:980px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font
 
 <script>
 (function(){
-  const API = window.PRICING_API_URL, EMAIL = window.CONTACT_EMAIL;
+  const meta = n => { const m=document.querySelector('meta[name="'+n+'"]'); return m ? m.getAttribute('content')||'' : ''; };
+  // Tolerate stray spaces and curly/straight quotes picked up while editing
+  const clean = v => String(v||'').replace(/[\u201C\u201D\u2018\u2019"'\s]/g,'');
+  const API = clean(meta('pricing-api-url') || window.PRICING_API_URL);
+  const EMAIL = clean(meta('contact-email')) || 'ajay@jupiterbs.com';
+  function apiProblem(u){
+    if(!u || u.indexOf('PASTE_YOUR')>-1) return 'No web app URL found in this page. Paste it into the pricing-api-url line near the top of index.html.';
+    if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(u)) return 'The pricing URL in this page is not an Apps Script web app link. It should start with https://script.google.com/ (found: ' + u.slice(0,60) + ').';
+    if(/\/home\/|\/edit(\b|$)|\/dev(\b|$)/.test(u)) return 'This is the Apps Script editor or test link. Use the Web app URL from Deploy › Manage deployments; it ends in /exec.';
+    if(!/\/exec(\?|$)/.test(u)) return 'The pricing URL should end in /exec. Copy the Web app URL from Deploy › Manage deployments.';
+    return '';
+  }
+  const PROBLEM = apiProblem(API);
   const MIN = 500, STEP = 500;
   const $ = id => document.getElementById(id);
   const aed = (n,d=2) => Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -184,7 +194,7 @@ footer{max-width:980px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font
 
   async function fetchPrice(V){
     if(cache.has(V)) return cache.get(V);
-    if(!API || API.indexOf('script.google.com') === -1) throw new Error('setup');
+    if(PROBLEM) throw new Error('setup');
     const res = await fetch(API + (API.indexOf('?')>-1?'&':'?') + 'volume=' + V, {method:'GET'});
     if(!res.ok) throw new Error('http');
     const data = await res.json();
@@ -206,8 +216,9 @@ footer{max-width:980px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font
         if(my===seq) show(data);
       }catch(e){
         if(my!==seq) return;
-        if(e.message==='setup') fail('The pricing service is not connected yet. Add the Apps Script web app URL to this page.');
-        else if(e.message==='http' || e.message==='api' || e instanceof TypeError) fail('We could not load the price just now. Please try again in a moment.');
+        if(e.message==='setup') fail(PROBLEM);
+        else if(e instanceof TypeError) fail('Could not reach the pricing service. In Apps Script, check the deployment has "Who has access: Anyone" (not only your organisation), then try again.');
+        else if(e.message==='http' || e.message==='api') fail('We could not load the price just now. Please try again in a moment.');
         else fail(e.message);
       }
     }, now ? 0 : 350);
